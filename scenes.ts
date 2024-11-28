@@ -11,6 +11,7 @@ export class Scenes {
     private static _instance: Scenes;
     private _scenes: Map<number, Scene> = new Map();
     private _activeScenes: Scene[] = [];
+    private _unstageScenes: Scene[] = [];
 
     static get instance() {
         if (!Scenes._instance) { Scenes._instance = new Scenes(); }
@@ -52,46 +53,59 @@ export class Scenes {
         }
     }
 
-    static async stageScene(id: (number | SceneReference)[] | number | SceneReference, priority?: number, transitionTimeMs?: number, brightness?: number) {
+    static async stageScene(id: (number | SceneReference)[] | number | SceneReference, priority?: number, transitionMs?: number, brightness?: number) {
         if (!Array.isArray(id)) { id = [id]; }
         for (const i of id) {
             let sceneId: number | undefined;
             if (i instanceof SceneReference) { sceneId = i.id; }
             else { sceneId = i; }
 
-            let scene = Scenes.getScene(sceneId);
+            const scene = Scenes.getScene(sceneId);
             if (!scene) {
                 Logger.error(`Failed to activate scene ${sceneId}, it was not found`);
                 throw `scene ${sceneId} not found`;
             }
 
             Logger.info(`Activating scene ${scene.name}`);
-            scene.attributes.priority = priority !== undefined ? priority : scene.attributes.priority;
-            scene.attributes.globalTransitionTime = transitionTimeMs !== undefined ? transitionTimeMs : scene.attributes.globalTransitionTime;
-            scene.attributes.globalBrightness = brightness !== undefined ? brightness : scene.attributes.globalBrightness;
+            let newScene = structuredClone(scene);
+            newScene.attributes.priority = priority !== undefined ? priority : newScene.attributes.priority;
+            newScene.attributes.globalTransitionMs = transitionMs !== undefined ? transitionMs : newScene.attributes.globalTransitionMs;
+            newScene.attributes.globalBrightnessPercent = brightness !== undefined ? brightness : newScene.attributes.globalBrightnessPercent;
 
             this.instance._activeScenes = this.instance._activeScenes.filter(s => s.id !== scene.id); //Remove old scene if it exists
-            this.instance._activeScenes.push(scene); //Place the scene at the end of the list
+            this.instance._activeScenes.push(newScene); //Place the scene at the end of the list
         }
     }
 
-    static async unstageScene(id: (number | SceneReference)[] | number | SceneReference) {
+    static async unstageScene(id: (number | SceneReference)[] | number | SceneReference, transitionMs?: number) {
         if (!Array.isArray(id)) { id = [id]; }
         for (const i of id) {
             let sceneId: number | undefined;
             if (i instanceof SceneReference) { sceneId = i.id; }
             else { sceneId = i; }
             Logger.info(`Deactivating scene ${sceneId}`);
+
+            //Stage the scene with only the transition time, so we fade out the scene
+            if (transitionMs !== undefined) {
+                const scene = Scenes.getScene(sceneId);
+                if (scene) {
+                    let newScene: Scene = structuredClone(scene);
+                    for (const i in newScene?.attributes.states || []) {
+                        newScene.attributes.states[i].attributes = {
+                            transitionMs
+                        }
+                    }
+                    this.instance._unstageScenes.push(newScene);
+                }
+            }
+
+            //Remove the scene from the active scenes
             this.instance._activeScenes = this.instance._activeScenes.filter(s => s.id !== sceneId);
         }
     }
 
-    static async sendScenes(transitionTimeMs?: number, brightness?: number) {
+    static async sendScenes(transitionMs?: number, brightness?: number) {
         var actions: Map<string, Map<Target, LightStateAttributes>> = new Map();
-        if (this.instance._activeScenes.length == 0) {
-            Logger.warn("No scenes to active, no need to send them");
-            return;
-        }
 
         const addTarget = (scene: Scene, target: Target, attributes: LightStateAttributes) => {
             //If its a group then handle all the targets in the group
@@ -115,29 +129,39 @@ export class Scenes {
                 ...actions.get(target.type)?.get(target) || {}
             };
 
-            const globalBrightness = brightness !== undefined ? brightness : scene.attributes.globalBrightness;
-            const globalTransitionTime = transitionTimeMs !== undefined ? transitionTimeMs : scene.attributes.globalTransitionTime;
-            if (globalBrightness !== undefined) {
-                if (attributes.brightnessPercent === undefined) { newAttributes.brightnessPercent = globalBrightness; }
+            const globalBrightnessPercent = brightness !== undefined ? brightness : scene.attributes.globalBrightnessPercent;
+            const globalTransitionMs = transitionMs !== undefined ? transitionMs : scene.attributes.globalTransitionMs;
+            if (globalBrightnessPercent !== undefined) {
+                if (attributes.brightnessPercent === undefined) { newAttributes.brightnessPercent = globalBrightnessPercent; }
                 else {
-                    newAttributes.brightnessPercent = Math.floor(attributes.brightnessPercent * (globalBrightness / 100));
+                    newAttributes.brightnessPercent = Math.floor(attributes.brightnessPercent * (globalBrightnessPercent / 100));
                 }
             }
-            newAttributes.transitionMs = globalTransitionTime !== undefined ? globalTransitionTime : attributes.transitionMs;
-
+            if (globalTransitionMs !== undefined) { newAttributes.transitionMs = globalTransitionMs; }
             if (!actions.has(target.type)) { actions.set(target.type, new Map()); }
             actions.get(target.type)?.set(target, newAttributes);
         }
 
         //Sort the scenes by priority
-        const sortedScenes = this.instance._activeScenes.reverse().sort((a, b) => {
-            if (!a) { return 1; }
-            if (!b) { return -1; }
-            if (a.attributes.priority === undefined && b.attributes.priority === undefined) { return 0; }
-            if (a.attributes.priority === undefined) { return 1; }
-            if (b.attributes.priority === undefined) { return -1; }
-            return b.attributes.priority - a.attributes.priority;
-        });
+        const sortedScenes = [
+            ...this.instance._activeScenes.reverse().sort((a, b) => { //Sort the scenes by priority
+                if (!a) { return 1; }
+                if (!b) { return -1; }
+                if (a.attributes.priority === undefined && b.attributes.priority === undefined) { return 0; }
+                if (a.attributes.priority === undefined) { return 1; }
+                if (b.attributes.priority === undefined) { return -1; }
+                return b.attributes.priority - a.attributes.priority;
+            }),
+            ...Array.from(this.instance._scenes.values()).filter(scene => scene.attributes.alwaysStage), //Add the scenes with always stage at the end
+            ...this.instance._unstageScenes //Add the scenes to unstage at the end so they always fade with the desired transition time
+        ];
+        this.instance._unstageScenes = [];
+
+        if (sortedScenes.length == 0) {
+            Logger.warn("No scenes to active, no need to send them");
+            return;
+        }
+        Logger.debug(`Sorted scenes: ${sortedScenes.map(s => s.name).join(", ")}`);
 
         //Loop through all the scenes and queue all the targets in the scenes by priority
         for (const scene of sortedScenes) {
@@ -183,6 +207,7 @@ export class Scenes {
         Logger.info(`Loaded ${Scenes.scenes.size} scenes`);
         for (const [id, scene] of Scenes.scenes) {
             Logger.info(`\t${id}: ${scene.name} (${scene.description}). Priority: ${scene.attributes.priority ? scene.attributes.priority : 0}`);
+            Logger.debug(`\t\t${JSON.stringify(scene.attributes)}`);
         }
     }
 

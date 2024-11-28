@@ -24,12 +24,12 @@ export class HTTPGetSceneRequest implements HTTPRequest {
 export class HTTPStageSceneRequest implements HTTPRequest {
     sceneId: number;
     priority?: number;
-    transitionTimeMs?: number;
+    transitionMs?: number;
     brightnessPercent?: number;
     constructor(body: any) {
         this.sceneId = body?.sceneId !== undefined ? parseInt(body?.sceneId) : -1;
         this.priority = body?.priority !== undefined ? parseInt(body?.priority) : undefined;
-        this.transitionTimeMs = body?.transitionTimeMs !== undefined ? parseInt(body?.transitionTimeMs) : undefined;
+        this.transitionMs = body?.transitionMs !== undefined ? parseInt(body?.transitionMs) : undefined;
         this.brightnessPercent = body?.brightnessPercent !== undefined ? parseInt(body?.brightnessPercent) : undefined;
     }
     validate(): void {
@@ -38,11 +38,24 @@ export class HTTPStageSceneRequest implements HTTPRequest {
     }
 }
 
+export class HTTPUnstageSceneRequest implements HTTPRequest {
+    sceneId: number;
+    transitionMs?: number;
+    constructor(body: any) {
+        this.sceneId = body?.sceneId !== undefined ? parseInt(body?.sceneId) : -1;
+        this.transitionMs = body?.transitionMs !== undefined ? parseInt(body?.transitionMs) : undefined;
+    }
+    validate(): void {
+        if (this.sceneId === undefined || this.sceneId == -1) { throw "No sceneId provided"; }
+        if (typeof this.sceneId !== "number") { throw "sceneId must be a number"; }
+    }
+}
+
 export class HTTPSendSceneRequest implements HTTPRequest {
-    transitionTimeMs?: number;
+    transitionMs?: number;
     brightnessPercent?: number;
     constructor(body: any) {
-        this.transitionTimeMs = body?.transitionTimeMs !== undefined ? parseInt(body?.transitionTimeMs) : undefined;
+        this.transitionMs = body?.transitionMs !== undefined ? parseInt(body?.transitionMs) : undefined;
         this.brightnessPercent = body?.brightnessPercent !== undefined ? parseInt(body?.brightnessPercent) : undefined;
     }
     validate(): void { }
@@ -83,7 +96,7 @@ export class HTTPInput implements Input {
             catch (e: any) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); return; }
 
             try {
-                await Scenes.stageScene(request.sceneId, request.priority, request.transitionTimeMs, request.brightnessPercent);
+                await Scenes.stageScene(request.sceneId, request.priority, request.transitionMs, request.brightnessPercent);
                 res.send(new WebResponse(WebStatus.SUCCESS));
             }
             catch (e) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); }
@@ -97,14 +110,14 @@ export class HTTPInput implements Input {
 
         //Unstage a scene
         WebServer.server.post("/scene/unstage", async (req: Request, res: Response) => {
-            const request = new HTTPStageSceneRequest(req.body);
+            const request = new HTTPUnstageSceneRequest(req.body);
             Logger.debug(`Received unstage scene request: ${JSON.stringify(request)}`);
 
             //Validate the request
             try { request.validate(); }
             catch (e: any) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); return; }
 
-            await Scenes.unstageScene(request.sceneId);
+            await Scenes.unstageScene(request.sceneId, request.transitionMs);
             res.send(new WebResponse(WebStatus.SUCCESS));
         });
 
@@ -117,7 +130,7 @@ export class HTTPInput implements Input {
             try { request.validate(); }
             catch (e: any) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); return; }
 
-            await Scenes.sendScenes(request.transitionTimeMs, request.brightnessPercent);
+            await Scenes.sendScenes(request.transitionMs, request.brightnessPercent);
             res.send(new WebResponse(WebStatus.SUCCESS));
         });
     }
