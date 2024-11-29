@@ -1,26 +1,33 @@
-import { Input } from "../input";
+import { Input } from "../../input";
 import express, { Express, Request, Response } from "express";
-import { WebResponse, WebServer, WebStatus } from "../webServer";
-import { Scenes } from "../scenes";
-import { Scene } from "../types/scene";
-import { Logger } from "../logger";
+import { WebResponse, WebServer, WebStatus } from "../../webServer";
+import { Scenes } from "../../scenes";
+import { Scene } from "../../types/scene";
+import { Logger } from "../../logger";
 
 export abstract class HTTPRequest {
     abstract validate(): void;
 }
 
+/**
+ * Get a scene by id or name
+ * <url>?sceneId=1
+ * <url>?sceneName=scene1
+ */
 export class HTTPGetSceneRequest implements HTTPRequest {
     sceneId?: number;
     sceneName?: string;
     constructor(body: any) {
-        this.sceneId = body?.sceneId;
+        this.sceneId = body?.sceneId !== undefined ? parseInt(body.sceneId) : undefined;
         this.sceneName = body?.sceneName;
     }
-    validate(): void {
-        if (this.sceneId === undefined && this.sceneName === undefined) { throw "Must provide sceneId or sceneName"; }
-    }
+    validate(): void { }
 }
 
+/**
+ * Stage a scene
+ * <url>?sceneId=[id]&priority=[priority]&transitionMs=[timeMS]&brightnessPercent=[0-100%]
+ */
 export class HTTPStageSceneRequest implements HTTPRequest {
     sceneId: number;
     priority?: number;
@@ -38,6 +45,10 @@ export class HTTPStageSceneRequest implements HTTPRequest {
     }
 }
 
+/**
+ * Unstage a scene
+ * <url>?sceneId=[id]&transitionMs=[timeMS]
+ */
 export class HTTPUnstageSceneRequest implements HTTPRequest {
     sceneId: number;
     transitionMs?: number;
@@ -51,6 +62,10 @@ export class HTTPUnstageSceneRequest implements HTTPRequest {
     }
 }
 
+/**
+ * Send scenes
+ * <url>?transitionMs=[timeMS]&brightnessPercent=[0-100%]
+ */
 export class HTTPSendSceneRequest implements HTTPRequest {
     transitionMs?: number;
     brightnessPercent?: number;
@@ -63,17 +78,23 @@ export class HTTPSendSceneRequest implements HTTPRequest {
 
 export class HTTPInput implements Input {
     constructor() {
-
         //Get a scene
         WebServer.server.get("/scene", async (req: Request, res: Response) => {
-            const request = new HTTPGetSceneRequest(req.body);
+            const request = new HTTPGetSceneRequest(req.query);
             Logger.debug(`Received get scene request: ${JSON.stringify(request)}`);
 
             //Validate the request
             try { request.validate(); }
             catch (e: any) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); return; }
 
-            const sceneId: number | undefined = request.sceneId == undefined ? Scenes.getSceneId(request.sceneName || "") : undefined;
+            //If there was no sceneId or sceneName provided, return all scenes
+            if (request.sceneId == undefined && request.sceneName == undefined) {
+                res.send(new WebResponse(WebStatus.SUCCESS, Array.from(Scenes.scenes.values())));
+                return;
+            }
+
+            //Otherwise return the requested scene
+            const sceneId: number | undefined = request.sceneId == undefined ? Scenes.getSceneId(request.sceneName || "") : request.sceneId;
             const scene: Scene | undefined = sceneId !== undefined ? Scenes.getScene(sceneId) : undefined;
 
             if (!scene) { res.status(501).send(new WebResponse(WebStatus.ERROR, "scene not found")); return; }
@@ -88,7 +109,7 @@ export class HTTPInput implements Input {
 
         //Stage a scene
         WebServer.server.post("/scene/stage", async (req: Request, res: Response) => {
-            const request = new HTTPStageSceneRequest(req.body);
+            const request = new HTTPStageSceneRequest(req.query);
             Logger.debug(`Received set stage scene request: ${JSON.stringify(request)}`);
 
             //Validate the request
@@ -101,16 +122,10 @@ export class HTTPInput implements Input {
             }
             catch (e) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); }
         });
-
-        //Get the current unstaged scenes
-        WebServer.server.get("/scene/unstage", async (req: Request, res: Response) => {
-            Logger.debug(`Received get unstaged scenes request`);
-            res.send(new WebResponse(WebStatus.SUCCESS, Array.from(Scenes.scenes.keys()).filter(id => !Scenes.activeScenes.find(scene => scene.id == id))));
-        });
-
+        
         //Unstage a scene
         WebServer.server.post("/scene/unstage", async (req: Request, res: Response) => {
-            const request = new HTTPUnstageSceneRequest(req.body);
+            const request = new HTTPUnstageSceneRequest(req.query);
             Logger.debug(`Received unstage scene request: ${JSON.stringify(request)}`);
 
             //Validate the request
@@ -123,7 +138,7 @@ export class HTTPInput implements Input {
 
         //Send scenes
         WebServer.server.post("/scene/send", async (req: Request, res: Response) => {
-            const request = new HTTPSendSceneRequest(req.body);
+            const request = new HTTPSendSceneRequest(req.query);
             Logger.debug(`Received send scenes request: ${JSON.stringify(request)}`);
 
             //Validate the request

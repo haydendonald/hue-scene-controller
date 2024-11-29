@@ -3,7 +3,7 @@ import { ConfigFile } from "./configFile";
 import { Controller } from "./controller";
 import { HueController } from "./controllers/hue";
 import { Input } from "./input";
-import { HTTPInput } from "./inputs/http";
+import { HTTPInput } from "./inputs/http/http";
 import { Logger, LogLevel } from "./logger";
 
 interface Configs {

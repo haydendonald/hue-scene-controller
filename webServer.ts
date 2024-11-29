@@ -1,7 +1,6 @@
 import express, { Express, Request, Response } from "express";
 import bodyParser from "body-parser";
 import { Logger } from "./logger";
-import multer from "multer";
 
 export enum WebStatus {
     SUCCESS = "success",
@@ -19,7 +18,6 @@ export class WebResponse {
 export class WebServer {
     static _instance: WebServer;
     private _server: express.Application;
-    private _upload: multer.Multer;
 
     private static get instance() {
         if (!WebServer._instance) { WebServer._instance = new WebServer(); }
@@ -36,10 +34,7 @@ export class WebServer {
 
     constructor() {
         this._server = express();
-        this._upload = multer();
         this._server.use(bodyParser.urlencoded({ extended: true }));
-        this._server.use(bodyParser.json());
-        this._server.use(this._upload.none()); 
         this._server.listen(this.port, () => {
             Logger.info(`Started web server on port ${this.port}`);
         });

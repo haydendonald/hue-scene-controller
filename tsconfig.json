@@ -19,6 +19,6 @@
         "scenes.ts",
         "controllers/*.ts",
         "inputs/*.ts",
-        "webServer.ts",
+        "webServer.ts", "inputs/http/http.ts",
     ]
 }
