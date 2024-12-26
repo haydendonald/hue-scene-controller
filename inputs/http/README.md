@@ -25,6 +25,14 @@ Get a list of scenes currently staged (this included modifiers)
  * sceneId (required) - The sceneId to unstage
  * transitionMs - How long to fade out for in milliseconds
 
+## Scene Toggle - `/scene/toggle`
+### POST `/scene/toggle`
+ Toggle a scene, staging it if not staged, and unstaging it if staged
+ * sceneId (required) - The sceneId to stage
+ * priority - What priority to stage with (higher number will put it above other scenes)
+ * transitionMs - How long to fade for in milliseconds
+ * brightnessPercent - How bright to set the scene in percentage
+
 ## Send - `/scene/send`
 ### POST `/scene/send`
  Unstage a scene (deactivate it)

@@ -104,6 +104,24 @@ export class Scenes {
         }
     }
 
+    static async toggleScene(id: (number | SceneReference)[] | number | SceneReference, priority?: number, transitionMs?: number, brightness?: number) {
+        if (!Array.isArray(id)) { id = [id]; }
+        for (const i of id) {
+            let sceneId: number | undefined;
+            if (i instanceof SceneReference) { sceneId = i.id; }
+            else { sceneId = i; }
+
+            //If it's staged, unstage it, otherwise stage it
+            const isStaged = Scenes.activeScenes.filter(scene => scene.id == sceneId).length != 0;
+            if (isStaged) {
+                Scenes.unstageScene(sceneId, transitionMs);
+            }
+            else {
+                Scenes.stageScene(sceneId, priority, transitionMs, brightness);
+            }
+        }
+    }
+
     static async sendScenes(transitionMs?: number, brightness?: number) {
         var actions: Map<string, Map<Target, LightStateAttributes>> = new Map();
 

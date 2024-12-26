@@ -76,6 +76,13 @@ export class HTTPSendSceneRequest implements HTTPRequest {
     validate(): void { }
 }
 
+/**
+ * Toggle a scene
+ * <url>?sceneId=[id]&priority=[priority]&transitionMs=[timeMS]&brightnessPercent=[0-100%]
+ */
+export class HTTPToggleSceneRequest extends HTTPStageSceneRequest { }
+
+
 export class HTTPInput implements Input {
     constructor() {
         //Get a scene
@@ -103,7 +110,7 @@ export class HTTPInput implements Input {
             const scene: Scene | undefined = sceneId !== undefined ? Scenes.getScene(sceneId) : undefined;
 
             if (!scene) { res.status(501).send(new WebResponse(WebStatus.ERROR, "scene not found")); return; }
-            
+
             res.send(new WebResponse(WebStatus.SUCCESS, {
                 scene,
                 staged: Scenes.activeScenes.filter(filterScene => filterScene.id == scene.id).length != 0
@@ -131,7 +138,7 @@ export class HTTPInput implements Input {
             }
             catch (e) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); }
         });
-        
+
         //Unstage a scene
         WebServer.server.post("/scene/unstage", async (req: Request, res: Response) => {
             const request = new HTTPUnstageSceneRequest(req.query);
@@ -157,5 +164,22 @@ export class HTTPInput implements Input {
             await Scenes.sendScenes(request.transitionMs, request.brightnessPercent);
             res.send(new WebResponse(WebStatus.SUCCESS));
         });
+
+        //Toggle a scene
+        WebServer.server.post("/scene/toggle", async (req: Request, res: Response) => {
+            const request = new HTTPToggleSceneRequest(req.query);
+            Logger.debug(`Received toggle stage scene request: ${JSON.stringify(request)}`);
+
+            //Validate the request
+            try { request.validate(); }
+            catch (e: any) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); return; }
+
+            try {
+                await Scenes.toggleScene(request.sceneId, request.priority, request.transitionMs, request.brightnessPercent);
+                res.send(new WebResponse(WebStatus.SUCCESS));
+            }
+            catch (e) { res.status(501).send(new WebResponse(WebStatus.ERROR, e)); }
+        });
+
     }
 }
