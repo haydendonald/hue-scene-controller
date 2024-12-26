@@ -89,7 +89,12 @@ export class HTTPInput implements Input {
 
             //If there was no sceneId or sceneName provided, return all scenes
             if (request.sceneId == undefined && request.sceneName == undefined) {
-                res.send(new WebResponse(WebStatus.SUCCESS, Array.from(Scenes.scenes.values())));
+                res.send(new WebResponse(WebStatus.SUCCESS, Array.from(Scenes.scenes.values()).map(scene => {
+                    return {
+                        scene,
+                        staged: Scenes.activeScenes.filter(filterScene => filterScene.id == scene.id).length != 0
+                    }
+                })));
                 return;
             }
 
@@ -98,7 +103,11 @@ export class HTTPInput implements Input {
             const scene: Scene | undefined = sceneId !== undefined ? Scenes.getScene(sceneId) : undefined;
 
             if (!scene) { res.status(501).send(new WebResponse(WebStatus.ERROR, "scene not found")); return; }
-            res.send(new WebResponse(WebStatus.SUCCESS, scene));
+            
+            res.send(new WebResponse(WebStatus.SUCCESS, {
+                scene,
+                staged: Scenes.activeScenes.filter(filterScene => filterScene.id == scene.id).length != 0
+            }));
         });
 
         //Get the current staged scenes
