@@ -25,9 +25,10 @@ export class HueLightReference implements Target {
 }
 
 export interface HueBridgeConfiguration {
-    serial: string;
-    userId: string;
-    userKey?: string;
+    serial: string; //The bridge serial number
+    userId: string; //The user id to use
+    userKey?: string; //The user key to use
+    useScene: boolean; //If true, a scene will be created and activated, if false the lights will be activated one by one. Default true
 }
 
 export class HueController implements Controller {
@@ -47,7 +48,7 @@ export class HueController implements Controller {
         return discoveryResults;
     }
 
-    private get useScene(): boolean { return true; }
+    private get useScene(): boolean { return this._config?.useScene === undefined ? true : this._config?.useScene; }
 
     async load() {
         try { this._config = await ConfigFile.loadConfig("hue"); }
@@ -121,7 +122,8 @@ export class HueController implements Controller {
                         userConfig = {
                             serial: bridge.model.serial,
                             userId: createdUser.username,
-                            userKey: createdUser.clientkey
+                            userKey: createdUser.clientkey,
+                            useScene: true
                         };
                     }
                     catch (e) { }
