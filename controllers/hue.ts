@@ -217,46 +217,55 @@ export class HueController implements Controller {
     }
 
     async sendQueuedTargets(): Promise<void> {
-        if (!this._api) { Logger.error(`Cannot send states, no bridge connected`); return; }
+        const self = this;
+        if (!self._api) { Logger.error(`Cannot send states, no bridge connected`); return; }
         Logger.info(`Sending states`);
 
         //Set the state of the lights directly
-        if (!this.useScene) {
-            for (const [target, attributes] of this._queuedTargets) {
-                Logger.debug(`Setting light ${target.id} to state: ${JSON.stringify(attributes)}`);
-                await this._api.lights.setLightState(target.id, attributes);
-            }
+        if (!self.useScene) {
+            await Promise.all(Array.from(self._queuedTargets, ([target, attributes]) => {
+                return new Promise<void>(async (resolve) => {
+                    try {
+                        Logger.debug(`Setting light ${target.id} to state: ${JSON.stringify(attributes)}`);
+                        await self._api?.lights.setLightState(target.id, attributes);
+                    }
+                    catch (e) { Logger.error(`Failed to set light ${target.id}: ${e}`); }
+                    resolve();
+                })
+            }));
             return;
         }
 
         //Create a temporary scene with the lights and activate it
         const send = hue.v3.model.createLightScene();
         send.name = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        send.lights = Array.from(this._queuedTargets.keys()).map(target => target.id.toString());
+        send.lights = Array.from(self._queuedTargets.keys()).map(target => target.id.toString());
         send.recycle = true;
         Logger.debug(`Creating scene: ${send.name}`);
-        const result = await this._api.scenes.createScene(send);
+        const result = await self._api.scenes.createScene(send);
 
         //Set the state of the lights into the scene
-        for (const [target, attributes] of this._queuedTargets) {
-            //We need to use a SceneLightState object but we have no way to create one from a state object, so hacky workaround
-            const state = this.attributesToState(attributes);
-            try {
-                await this._api.scenes.updateLightState(result.id as SceneId, target.id, state);
-                Logger.debug(`Set light ${target.id} to state: ${JSON.stringify(state.getPayload())} in scene ${result.id}`);
-            }
-            catch (e) { Logger.error(`Error setting light state for ${target.id}: ${e}`); }
-        }
+        await Promise.all(Array.from(self._queuedTargets, ([target, attributes]) => {
+            return new Promise<void>(async (resolve) => {
+                const state = self.attributesToState(attributes);
+                try {
+                    await self._api?.scenes.updateLightState(result.id as SceneId, target.id, state);
+                    Logger.debug(`Set light ${target.id} to state: ${JSON.stringify(state.getPayload())} in scene ${result.id}`);
+                }
+                catch (e) { Logger.error(`Error setting light state for ${target.id}: ${e}`); }
+                resolve();
+            })
+        }));
 
         //Activate the scene
         Logger.debug(`Activating scene: ${result.id}`);
-        await this._api.scenes.activateScene(result.id as SceneId);
+        await self._api.scenes.activateScene(result.id as SceneId);
 
         //Delete the scene now
         Logger.debug(`Deleting scene: ${result.id}`);
-        await this._api.scenes.deleteScene(result.id as SceneId);
+        await self._api.scenes.deleteScene(result.id as SceneId);
 
         //Clear the queued targets
-        this._queuedTargets.clear();
+        self._queuedTargets.clear();
     }
 }
