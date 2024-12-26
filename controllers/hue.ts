@@ -224,7 +224,7 @@ export class HueController implements Controller {
         if (!this.useScene) {
             for (const [target, attributes] of this._queuedTargets) {
                 Logger.debug(`Setting light ${target.id} to state: ${JSON.stringify(attributes)}`);
-                await this._api.lights.setLightState(target.id, this.attributesToState(attributes));
+                await this._api.lights.setLightState(target.id, attributes);
             }
             return;
         }
