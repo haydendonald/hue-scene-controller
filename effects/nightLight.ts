@@ -39,8 +39,8 @@ export class NightLightEffect extends Effect {
             
             const transitionMs = forceQueue == true ? this._fadeTime : this._longFadeTime;
             const attributes = {
-                ... { brightnessPercent },
                 ...currentAttributes,
+                ... { brightnessPercent },
                 ...transitionMs ? { transitionMs } : {}
             }
             Scenes.queueTarget(target, attributes);

@@ -18,7 +18,7 @@ export class NaturalLightEffect extends Effect {
     constructor(target: Target, attributes: LightStateAttributes) {
         super("Natural Light", "Mimic the natural light cycle of the day", target, attributes);
         this._fadeTime = attributes.transitionMs;
-        this._brightness = attributes.brightnessPercent || 100;
+        this._brightness = attributes.brightnessPercent;
     }
 
     async queue(forceQueue: boolean = false): Promise<boolean> {
@@ -38,8 +38,8 @@ export class NaturalLightEffect extends Effect {
 
             const transitionMs = forceQueue == true ? this._fadeTime : this._longFadeTime;
             const attributes = {
-                ... { brightnessPercent: this._brightness },
                 ...currentAttributes,
+                ...this._brightness ? { brightnessPercent: this._brightness } : {},
                 ... { colorTemperature },
                 ...transitionMs ? { transitionMs } : {}
             }
