@@ -41,3 +41,14 @@ The scene will set the color temperatures as follows:
 - 6am - 9am: 2700K
 - 9am - 6pm: 4000K
 - 6pm - 9pm: 2700K
+
+## Night Light - `Night Light`
+Set the brightness of the lights to be duller at night
+- `transitionMS` time to fade on/off (will always fade between colors at 60 minutes)
+- `brightnessPercent` the minimum brightness to reach
+
+The scene will set the brightness as follows:
+- 9pm - 6am: 5%
+- 6am - 9am: 70%
+- 9am - 6pm: 100%
+- 6pm - 9pm: 70%

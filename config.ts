@@ -4,6 +4,7 @@ import { Controller } from "./controller";
 import { HueController } from "./controllers/hue";
 import { ColorCycle } from "./effects/colorCycle";
 import { NaturalLightEffect } from "./effects/naturalLight";
+import { NightLightEffect } from "./effects/nightLight";
 import { Input } from "./input";
 import { HTTPInput } from "./inputs/http/http";
 import { Logger, LogLevel } from "./logger";
@@ -76,6 +77,8 @@ export class Config {
                 return new ColorCycle(target, attributes);
             case "Natural Light":
                 return new NaturalLightEffect(target, attributes);
+            case "Night Light":
+                return new NightLightEffect(target, attributes);
         }
     }
 }
