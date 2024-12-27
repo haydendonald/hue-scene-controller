@@ -33,8 +33,7 @@ export class NightLightEffect extends Effect {
             const hour = new Date().getHours();
             if (hour >= 21 || hour < 6) { brightnessPercent = 5; } //During the night, 9pm to 6am
             else if (hour >= 6 && hour < 9) { brightnessPercent = 70; } //Morning, 6am to 9am
-            else if (hour >= 9 && hour < 18) { brightnessPercent = 100; } //Day, 9am to 6pm
-            else if (hour >= 18 && hour < 21) { brightnessPercent = 70; } //Evening, 6pm to 9pm
+            else if (hour >= 9 && hour < 21) { brightnessPercent = 100; } //Day, 9am to 9pm
 
             if (brightnessPercent < this._brightness) { brightnessPercent = this._brightness; } //Don't go below the minimum brightness
 

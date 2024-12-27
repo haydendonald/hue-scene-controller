@@ -50,5 +50,4 @@ Set the brightness of the lights to be duller at night
 The scene will set the brightness as follows:
 - 9pm - 6am: 5%
 - 6am - 9am: 70%
-- 9am - 6pm: 100%
-- 6pm - 9pm: 70%
+- 9am - 9pm: 100%
