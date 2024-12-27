@@ -13,7 +13,7 @@ export class Scenes {
     private _scenes: Map<number, Scene> = new Map();
     private _activeScenes: Scene[] = [];
     private _unstageScenes: Scene[] = [];
-    private _runningEffects: Map<string, Map<Target, Effect>> = new Map();
+    private _runningEffects: Map<string, Map<Target, Effect[]>> = new Map();
     private _currentTargets: Map<string, Map<Target, LightStateAttributes>> = new Map();
     private _effectsHandler: NodeJS.Timeout | undefined;
 
@@ -46,11 +46,15 @@ export class Scenes {
                 await Scenes.sendQueuedTargets();
 
                 //Callback for when the queue is sent to the controllers
-                for (const [type, effects] of this._runningEffects) {
-                    for (const [target, effect] of effects) {
-                        await effect.sent();
+                let waitingFor = [];
+                for (const [uid, group] of this._runningEffects) {
+                    for (const [target, effects] of group) {
+                        for (const effect of effects) {
+                            waitingFor.push(new Promise<void>(async (resolve) => { await effect.sent(); resolve(); }));
+                        }
                     }
                 }
+                await Promise.all(waitingFor);
             }
 
             this._effectsHandler = setTimeout(handleEffects, 10); //Run every 10ms
@@ -59,12 +63,19 @@ export class Scenes {
     }
 
     static async queueEffects(forceQueue: boolean = false): Promise<boolean> {
+        let waitingFor = [];
         let effectQueued = false;
-        for (const [type, effects] of this.instance._runningEffects) {
-            for (const [target, effect] of effects) {
-                if (await effect.queue(forceQueue)) { effectQueued = true; }
+        for (const [uid, group] of this.instance._runningEffects) {
+            for (const [target, effects] of group) {
+                for (const effect of effects) {
+                    waitingFor.push(new Promise<void>(async (resolve) => {
+                        if (await effect.queue(forceQueue)) { effectQueued = true; }
+                        resolve();
+                    }));
+                }
             }
         }
+        await Promise.all(waitingFor);
         return effectQueued;
     }
 
@@ -216,7 +227,8 @@ export class Scenes {
                         if (effect) {
                             const uid = `${target.type}-${target.id}`;
                             if (!this._instance._runningEffects.has(uid)) { this._instance._runningEffects.set(uid, new Map()); }
-                            this.instance._runningEffects.get(uid)?.set(target, effect);
+                            if (!this._instance._runningEffects.get(uid)?.has(target)) { this._instance._runningEffects.get(uid)?.set(target, []); }
+                            this._instance._runningEffects.get(uid)?.get(target)?.push(effect);
                         }
                     }
 
@@ -250,12 +262,16 @@ export class Scenes {
 
             //Should we run any effects on the light directly?
             if (newAttributes.effect) {
-                const effect = fromGroup == false ? Config.createEffect(newAttributes.effect, target, newAttributes) : undefined;
+                const effect = Config.createEffect(newAttributes.effect, target, newAttributes);
                 if (effect) {
-                    if (!this._instance._runningEffects.has(target.type)) { this._instance._runningEffects.set(target.type, new Map()); }
-                    this.instance._runningEffects.get(target.type)?.set(target, effect);
+                    if (fromGroup == false) {
+                        if (!this._instance._runningEffects.has(target.type)) { this._instance._runningEffects.set(target.type, new Map()); }
+                        if (!this._instance._runningEffects.get(target.type)?.has(target)) { this._instance._runningEffects.get(target.type)?.set(target, []); }
+                        this._instance._runningEffects.get(target.type)?.get(target)?.push(effect);
+                    }
+                    return;
                 }
-                delete newAttributes.effect;
+                // delete newAttributes.effect;
             }
 
             //Add the target to the actions
