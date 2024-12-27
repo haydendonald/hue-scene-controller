@@ -74,6 +74,8 @@ export class Config {
         switch (name) {
             case "Color Cycle":
                 return new ColorCycle(target, attributes);
+            case "Natural Light":
+                return new NaturalLightEffect(target, attributes);
         }
     }
 }

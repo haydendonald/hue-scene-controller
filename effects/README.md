@@ -30,3 +30,14 @@ If you know an effect that is supported by the controller (hue) this can be used
 Do a RGB cycle
 - `transitionMS` will set how long to fade between colors
 - `brightnessPercent` will set the brightness
+
+## Natural Light - `Natural Light`
+Set the color temperature of the lights to white during the day and warm white at night
+- `transitionMS` time to fade on/off (will always fade between colors at 60 minutes)
+- `brightnessPercent` will set the brightness
+
+The scene will set the color temperatures as follows:
+- 9pm - 6am: 2000K
+- 6am - 9am: 2700K
+- 9am - 6pm: 4000K
+- 6pm - 9pm: 2700K
