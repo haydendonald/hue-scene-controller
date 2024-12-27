@@ -17,7 +17,7 @@ export class NightLightEffect extends Effect {
 
     constructor(target: Target, attributes: LightStateAttributes) {
         super("Night Light", "Adjust the brightness of the lights to be more comfortable for night time", target, attributes);
-        this._fadeTime = attributes.transitionMs || 5000;
+        this._fadeTime = attributes.transitionMs;
         this._brightness = attributes.brightnessPercent || 100; //Minimum brightness
     }
 
@@ -36,11 +36,12 @@ export class NightLightEffect extends Effect {
             else if (hour >= 9 && hour < 21) { brightnessPercent = 100; } //Day, 9am to 9pm
 
             if (brightnessPercent < this._brightness) { brightnessPercent = this._brightness; } //Don't go below the minimum brightness
-
+            
+            const transitionMs = forceQueue == true ? this._fadeTime : this._longFadeTime;
             const attributes = {
                 ... { brightnessPercent },
                 ...currentAttributes,
-                ... { transitionMs: forceQueue == true ? this._fadeTime : this._longFadeTime }
+                ...transitionMs ? { transitionMs } : {}
             }
             Scenes.queueTarget(target, attributes);
         }

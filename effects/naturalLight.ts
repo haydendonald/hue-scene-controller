@@ -17,7 +17,7 @@ export class NaturalLightEffect extends Effect {
 
     constructor(target: Target, attributes: LightStateAttributes) {
         super("Natural Light", "Mimic the natural light cycle of the day", target, attributes);
-        this._fadeTime = attributes.transitionMs || 5000;
+        this._fadeTime = attributes.transitionMs;
         this._brightness = attributes.brightnessPercent || 100;
     }
 
@@ -36,11 +36,12 @@ export class NaturalLightEffect extends Effect {
             else if (hour >= 9 && hour < 18) { colorTemperature = 4000; } //Day, 9am to 6pm
             else if (hour >= 18 && hour < 21) { colorTemperature = 2700; } //Evening, 6pm to 9pm
 
+            const transitionMs = forceQueue == true ? this._fadeTime : this._longFadeTime;
             const attributes = {
                 ... { brightnessPercent: this._brightness },
                 ...currentAttributes,
                 ... { colorTemperature },
-                ... { transitionMs: forceQueue == true ? this._fadeTime : this._longFadeTime }
+                ...transitionMs ? { transitionMs } : {}
             }
             Scenes.queueTarget(target, attributes);
         }
