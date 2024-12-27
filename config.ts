@@ -71,6 +71,9 @@ export class Config {
      * @returns A new instance of the effect
      */
     static createEffect(name: string, target: Target, attributes: LightStateAttributes): Effect | undefined {
-        throw new Error("Method not implemented.");
+        switch (name) {
+            case "Color Cycle":
+                return new ColorCycle(target, attributes);
+        }
     }
 }

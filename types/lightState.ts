@@ -5,8 +5,8 @@ export interface LightStateAttributes {
     transitionMs?: number; //The transition time in milliseconds
     brightnessPercent?: number; //The brightness percentage
     colorTemperature?: number; //The color temperature in kelvin
-    hue?: number; //The hue
-    sat?: number; //The saturation
+    hue?: number; //The hue between 0 and 360 degrees
+    sat?: number; //The saturation between 0 and 100 percent
     effect?: string; //The effect to apply to the light
 }
 
