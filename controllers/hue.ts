@@ -70,20 +70,20 @@ export class HueController implements Controller {
             let time = attributes.transitionMs / 100;
             if (time < 0) { time = 0; }
             else if (time > 65535) { time = 65535; }
-            state.transitiontime(time);
+            else { state.transitiontime(time); }
         }
         if (attributes.on === false) { return state; } //If the light is off we cannot set any other attributes
         if (attributes.brightnessPercent !== undefined) {
             let brightness = attributes.brightnessPercent;
             if (brightness < 0) { brightness = 0; }
             else if (brightness > 100) { brightness = 100; }
-            state.brightness(brightness);
+            else { state.brightness(brightness); }
         }
         if (attributes.colorTemperature !== undefined) {
             const mired = 1000000 / attributes.colorTemperature;
             if (mired < 153) { state.ct(153); }
             else if (mired > 500) { state.ct(500); }
-            state.ct(mired);
+            else { state.ct(mired); }
         }
         if (attributes.hue !== undefined) { state.hue((attributes.hue / 360) * 65535); }
         if (attributes.sat !== undefined) { state.sat((attributes.sat / 100) * 254); }
