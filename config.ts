@@ -2,9 +2,14 @@
 import { ConfigFile } from "./configFile";
 import { Controller } from "./controller";
 import { HueController } from "./controllers/hue";
+import { ColorCycle } from "./effects/colorCycle";
+import { NaturalLightEffect } from "./effects/naturalLight";
 import { Input } from "./input";
 import { HTTPInput } from "./inputs/http/http";
 import { Logger, LogLevel } from "./logger";
+import { Effect } from "./types/effect";
+import { LightStateAttributes } from "./types/lightState";
+import { Target } from "./types/target";
 
 interface Configs {
     logLevel: LogLevel;
@@ -56,5 +61,16 @@ export class Config {
     static async save() {
         if (!Config._instance) { Config._instance = new Config(); }
         ConfigFile.saveConfig("config", Config._instance._configurations);
+    }
+
+    /**
+     * Create an effect by name
+     * @param name The name
+     * @param targets The targets
+     * @param attributes The attributes
+     * @returns A new instance of the effect
+     */
+    static createEffect(name: string, target: Target, attributes: LightStateAttributes): Effect | undefined {
+        throw new Error("Method not implemented.");
     }
 }

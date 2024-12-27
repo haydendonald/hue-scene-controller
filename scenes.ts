@@ -6,12 +6,16 @@ import { Logger } from "./logger";
 import { Scene, SceneAttributes, SceneReference } from "./types/scene";
 import { Target } from "./types/target";
 import { GroupReference } from "./types/group";
+import { Effect } from "./types/effect";
 
 export class Scenes {
     private static _instance: Scenes;
     private _scenes: Map<number, Scene> = new Map();
     private _activeScenes: Scene[] = [];
     private _unstageScenes: Scene[] = [];
+    private _runningEffects: Map<string, Map<Target, Effect>> = new Map();
+    private _currentTargets: Map<string, Map<Target, LightStateAttributes>> = new Map();
+    private _effectsHandler: NodeJS.Timeout | undefined;
 
     static get instance() {
         if (!Scenes._instance) { Scenes._instance = new Scenes(); }
@@ -25,6 +29,43 @@ export class Scenes {
 
     static get activeScenes() {
         return Scenes.instance._activeScenes;
+    }
+
+    constructor() {
+        Scenes._instance = this;
+
+        //Periodically run the effect handlers
+        const handleEffects = async () => {
+            clearTimeout(this._effectsHandler);
+
+            //Queue any changes for the effects
+            const effectQueued = await Scenes.queueEffects();
+
+            //Send the queued targets if any effects were queued
+            if (effectQueued == true) {
+                await Scenes.sendQueuedTargets();
+
+                //Callback for when the queue is sent to the controllers
+                for (const [type, effects] of this._runningEffects) {
+                    for (const [target, effect] of effects) {
+                        await effect.sent();
+                    }
+                }
+            }
+
+            this._effectsHandler = setTimeout(handleEffects, 10); //Run every 10ms
+        }
+        handleEffects();
+    }
+
+    static async queueEffects(forceQueue: boolean = false): Promise<boolean> {
+        let effectQueued = false;
+        for (const [type, effects] of this.instance._runningEffects) {
+            for (const [target, effect] of effects) {
+                if (await effect.queue(forceQueue)) { effectQueued = true; }
+            }
+        }
+        return effectQueued;
     }
 
     static addScene(name: string, description: string, attributes: SceneAttributes) {
@@ -122,17 +163,66 @@ export class Scenes {
         }
     }
 
+    static getCurrentTargets(type: string) {
+        return this.instance._currentTargets.get(type);
+    }
+
+    static getCurrentTarget(target: Target) {
+        return this.instance._currentTargets.get(target.type)?.get(target);
+    }
+
+    static async queueTarget(target: Target, attributes: LightStateAttributes) {
+        let foundTarget = false;
+        for (const controller of Config.controllers) {
+            if (controller.queueTarget(target, attributes)) {
+                const type = target.type;
+                if (!this._instance._currentTargets.has(type)) { this._instance._currentTargets.set(type, new Map()); }
+                this._instance._currentTargets.get(type)?.set(target, attributes);
+                foundTarget = true;
+                break;
+            }
+        }
+        if (!foundTarget) {
+            Logger.warn(`Failed to fully activate target ${target.name}(${target.id}), target type ${target.type} was not found`);
+        }
+    }
+
+    static async queueTargets(actions: Map<string, Map<Target, LightStateAttributes>>) {
+        for (const [type, targets] of actions) {
+            for (const [target, attributes] of targets) {
+                this.queueTarget(target, attributes);
+            }
+        }
+    }
+
+    static async sendQueuedTargets() {
+        await Promise.all(Config.controllers.map(async controller => {
+            await controller.sendQueuedTargets();
+        }));
+    }
+
     static async sendScenes(transitionMs?: number, brightness?: number) {
         var actions: Map<string, Map<Target, LightStateAttributes>> = new Map();
 
-        const addTarget = (scene: Scene, target: Target, attributes: LightStateAttributes) => {
+        const addTarget = (scene: Scene, target: Target, attributes: LightStateAttributes, fromGroup: boolean) => {
             //If its a group then handle all the targets in the group
-            if (target.type === "group") {
+            if (Groups.isGroup(target)) {
                 const groupTarget = target as GroupReference;
                 const group = Groups.getGroup(groupTarget.id);
                 if (group) {
+                    //Should we run any effects on the group?
+                    if (fromGroup == false && attributes.effect) {
+                        const effect = Config.createEffect(attributes.effect, target, attributes);
+                        if (effect) {
+                            const uid = `${target.type}-${target.id}`;
+                            if (!this._instance._runningEffects.has(uid)) { this._instance._runningEffects.set(uid, new Map()); }
+                            this.instance._runningEffects.get(uid)?.set(target, effect);
+                        }
+                    }
+
+                    //Add all the targets in the group
                     for (const target of group.targets) {
-                        addTarget(scene, target, attributes);
+                        addTarget(scene, target, attributes, true);
                     }
                 }
                 else {
@@ -156,6 +246,19 @@ export class Scenes {
                 }
             }
             if (globalTransitionMs !== undefined) { newAttributes.transitionMs = globalTransitionMs; }
+
+
+            //Should we run any effects on the light directly?
+            if (newAttributes.effect) {
+                const effect = fromGroup == false ? Config.createEffect(newAttributes.effect, target, newAttributes) : undefined;
+                if (effect) {
+                    if (!this._instance._runningEffects.has(target.type)) { this._instance._runningEffects.set(target.type, new Map()); }
+                    this.instance._runningEffects.get(target.type)?.set(target, effect);
+                }
+                delete newAttributes.effect;
+            }
+
+            //Add the target to the actions
             if (!actions.has(target.type)) { actions.set(target.type, new Map()); }
             actions.get(target.type)?.set(target, newAttributes);
         }
@@ -181,36 +284,28 @@ export class Scenes {
         }
         Logger.debug(`Sorted scenes: ${sortedScenes.map(s => s.name).join(", ")}`);
 
+        //Stop all running effects
+        for (const [type, effects] of this._instance._runningEffects) {
+            this.instance._runningEffects.get(type)?.clear();
+            this._instance._runningEffects.delete(type);
+        }
+
         //Loop through all the scenes and queue all the targets in the scenes by priority
         for (const scene of sortedScenes) {
             Logger.info(`Applying scene ${scene.name} with priority ${scene.attributes.priority || "0"}`);
             for (const state of scene.attributes.states) {
                 for (const target of state.targets) {
-                    addTarget(scene, target, state.attributes);
-                }
-            }
-        }
-
-        //Now queue all the targets
-        for (const [type, targets] of actions) {
-            for (const [target, attributes] of targets) {
-                let foundTarget = false;
-                for (const controller of Config.controllers) {
-                    if (controller.queueTarget(target, attributes)) {
-                        foundTarget = true;
-                        break;
+                    if (state.attributes) {
+                        addTarget(scene, target, state.attributes, false);
                     }
                 }
-                if (!foundTarget) {
-                    Logger.warn(`Failed to fully activate scenes, target type ${target.type} was not found`);
-                }
             }
         }
 
-        //Ok, now send all the queued targets
-        return Promise.all(Config.controllers.map(async controller => {
-            await controller.sendQueuedTargets();
-        }));
+        //Queue and send the targets to the controllers
+        await Scenes.queueTargets(actions);
+        await Scenes.queueEffects(true);
+        await Scenes.sendQueuedTargets();
     }
 
     /**

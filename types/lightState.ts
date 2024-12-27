@@ -12,5 +12,6 @@ export interface LightStateAttributes {
 
 export interface LightState {
     targets: Target[]; //The targets of this state
-    attributes: LightStateAttributes; //The attributes of this state
+    attributes?: LightStateAttributes; //The attributes of this state
+    effect?: string; //Should we apply an effect to the light
 }

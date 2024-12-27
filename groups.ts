@@ -58,4 +58,32 @@ export class Groups {
     static getGroup(id: number) {
         return Groups.groups.get(id);
     }
+
+    static isGroup(target: Target) {
+        return target.type === "group";
+    }
+
+    /**
+     * Iterate down a group and return all targets in the group and subgroups
+     * @param group The group
+     * @returns A list of targets
+     */
+    static getTargetsFromGroup(group: Group): Target[] {
+        let targets: Target[] = [];
+        for (const target of group.targets) {
+            if (Groups.isGroup(target)) {
+                const group = Groups.getGroup(target.id);
+                if (group) {
+                    targets = [
+                        ...targets,
+                        ...Groups.getTargetsFromGroup(group)
+                    ]
+                }
+            }
+            else {
+                targets.push(target);
+            }
+        }
+        return targets;
+    }
 }

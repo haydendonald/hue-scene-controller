@@ -34,7 +34,7 @@ export interface HueBridgeConfiguration {
 export class HueController implements Controller {
     private _config?: HueBridgeConfiguration;
     private _api?: Api;
-    private _queuedTargets: Map<Target, LightStateAttributes> = new Map();
+    private _queuedTargets: Map<Target, LightState> = new Map();
     private _lights: Map<number, Light> = new Map();
 
     /**
@@ -63,9 +63,16 @@ export class HueController implements Controller {
         await ConfigFile.saveConfig("hue", this._config);
     }
 
-    private attributesToState(attributes: LightStateAttributes): SceneLightState {
-        const state = new SceneLightState();
+    private attributesToLightState(attributes: LightStateAttributes): LightState {
+        const state = new LightState();
         if (attributes.on !== undefined) { state.on(attributes.on); }
+        if (attributes.transitionMs !== undefined) {
+            let time = attributes.transitionMs / 100;
+            if (time < 0) { time = 0; }
+            else if (time > 65535) { time = 65535; }
+            state.transitiontime(time);
+        }
+        if (attributes.on === false) { return state; } //If the light is off we cannot set any other attributes
         if (attributes.brightnessPercent !== undefined) {
             let brightness = attributes.brightnessPercent;
             if (brightness < 0) { brightness = 0; }
@@ -78,16 +85,14 @@ export class HueController implements Controller {
             else if (mired > 500) { state.ct(500); }
             state.ct(mired);
         }
-        if (attributes.hue !== undefined) { state.hue(attributes.hue); }
-        if (attributes.sat !== undefined) { state.sat(attributes.sat); }
+        if (attributes.hue !== undefined) { state.hue((attributes.hue / 360) * 65535); }
+        if (attributes.sat !== undefined) { state.sat((attributes.sat / 100) * 254); }
         if (attributes.effect !== undefined) { state.effect(attributes.effect); }
-        if (attributes.transitionMs !== undefined) {
-            let time = attributes.transitionMs / 100;
-            if (time < 0) { time = 0; }
-            else if (time > 65535) { time = 65535; }
-            state.transitiontime(time);
-        }
         return state;
+    }
+
+    private lightStateToSceneState(attributes: LightState): SceneLightState {
+        return new SceneLightState().populate(attributes);
     }
 
     async authorize() {
@@ -210,7 +215,7 @@ export class HueController implements Controller {
 
     queueTarget(target: Target, attributes: LightStateAttributes): boolean {
         if (target.type == "hue") {
-            this._queuedTargets.set(target, attributes);
+            this._queuedTargets.set(target, this.attributesToLightState(attributes));
             return true;
         }
         return false;
@@ -219,6 +224,7 @@ export class HueController implements Controller {
     async sendQueuedTargets(): Promise<void> {
         const self = this;
         if (!self._api) { Logger.error(`Cannot send states, no bridge connected`); return; }
+        if (self._queuedTargets.size == 0) { return; }
         Logger.info(`Sending states`);
 
         //Set the state of the lights directly
@@ -226,44 +232,44 @@ export class HueController implements Controller {
             await Promise.all(Array.from(self._queuedTargets, ([target, attributes]) => {
                 return new Promise<void>(async (resolve) => {
                     try {
-                        Logger.debug(`Setting light ${target.id} to state: ${JSON.stringify(attributes)}`);
+                        Logger.debug(`Setting light ${target.id} to state: ${JSON.stringify(attributes.getPayload())}`);
                         await self._api?.lights.setLightState(target.id, attributes);
                     }
                     catch (e) { Logger.error(`Failed to set light ${target.id}: ${e}`); }
                     resolve();
                 })
             }));
-            return;
         }
+        else {
+            //Create a temporary scene with the lights and activate it
+            const send = hue.v3.model.createLightScene();
+            send.name = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            send.lights = Array.from(self._queuedTargets.keys()).map(target => target.id.toString());
+            send.recycle = true;
+            Logger.debug(`Creating scene: ${send.name}`);
+            const result = await self._api.scenes.createScene(send);
 
-        //Create a temporary scene with the lights and activate it
-        const send = hue.v3.model.createLightScene();
-        send.name = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        send.lights = Array.from(self._queuedTargets.keys()).map(target => target.id.toString());
-        send.recycle = true;
-        Logger.debug(`Creating scene: ${send.name}`);
-        const result = await self._api.scenes.createScene(send);
+            //Set the state of the lights into the scene
+            await Promise.all(Array.from(self._queuedTargets, ([target, attributes]) => {
+                return new Promise<void>(async (resolve) => {
+                    const state = self.lightStateToSceneState(attributes);
+                    try {
+                        await self._api?.scenes.updateLightState(result.id as SceneId, target.id, state);
+                        Logger.debug(`Set light ${target.id} to state: ${JSON.stringify(state.getPayload())} in scene ${result.id}`);
+                    }
+                    catch (e) { Logger.error(`Error setting light state for ${target.id}: ${e}`); }
+                    resolve();
+                })
+            }));
 
-        //Set the state of the lights into the scene
-        await Promise.all(Array.from(self._queuedTargets, ([target, attributes]) => {
-            return new Promise<void>(async (resolve) => {
-                const state = self.attributesToState(attributes);
-                try {
-                    await self._api?.scenes.updateLightState(result.id as SceneId, target.id, state);
-                    Logger.debug(`Set light ${target.id} to state: ${JSON.stringify(state.getPayload())} in scene ${result.id}`);
-                }
-                catch (e) { Logger.error(`Error setting light state for ${target.id}: ${e}`); }
-                resolve();
-            })
-        }));
+            //Activate the scene
+            Logger.debug(`Activating scene: ${result.id}`);
+            await self._api.scenes.activateScene(result.id as SceneId);
 
-        //Activate the scene
-        Logger.debug(`Activating scene: ${result.id}`);
-        await self._api.scenes.activateScene(result.id as SceneId);
-
-        //Delete the scene now
-        Logger.debug(`Deleting scene: ${result.id}`);
-        await self._api.scenes.deleteScene(result.id as SceneId);
+            //Delete the scene now
+            Logger.debug(`Deleting scene: ${result.id}`);
+            await self._api.scenes.deleteScene(result.id as SceneId);
+        }
 
         //Clear the queued targets
         self._queuedTargets.clear();
