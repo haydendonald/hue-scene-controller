@@ -118,7 +118,7 @@ export class Scenes {
                 throw `scene ${sceneId} not found`;
             }
 
-            Logger.info(`Activating scene ${scene.name}`);
+            Logger.info(`Activating scene ${scene.name}(${scene.id})`);
             let newScene = structuredClone(scene);
             newScene.attributes.priority = priority !== undefined ? priority : newScene.attributes.priority;
             newScene.attributes.globalTransitionMs = transitionMs !== undefined ? transitionMs : newScene.attributes.globalTransitionMs;
@@ -135,11 +135,12 @@ export class Scenes {
             let sceneId: number | undefined;
             if (i instanceof SceneReference) { sceneId = i.id; }
             else { sceneId = i; }
-            Logger.info(`Deactivating scene ${sceneId}`);
+
+            const scene = Scenes.getScene(sceneId);
+            Logger.info(`Deactivating scene ${scene ? scene.name + "(" + scene.id + ")" : sceneId}`);
 
             //Stage the scene with only the transition time, so we fade out the scene
             if (transitionMs !== undefined) {
-                const scene = Scenes.getScene(sceneId);
                 if (scene) {
                     let newScene: Scene = structuredClone(scene);
                     for (const i in newScene?.attributes.states || []) {
@@ -280,7 +281,7 @@ export class Scenes {
         }
 
         //Sort the scenes by priority
-        const sortedScenes = [
+        let sortedScenes = [
             ...this.instance._activeScenes.reverse().sort((a, b) => { //Sort the scenes by priority
                 if (!a) { return 1; }
                 if (!b) { return -1; }
@@ -290,15 +291,20 @@ export class Scenes {
                 return b.attributes.priority - a.attributes.priority;
             }),
             ...Array.from(this.instance._scenes.values()).filter(scene => scene.attributes.alwaysStage), //Add the scenes with always stage at the end
-            ...this.instance._unstageScenes //Add the scenes to unstage at the end so they always fade with the desired transition time
         ];
+
+        //Print the scenes being staged
+        for (const scene of sortedScenes) {
+            Logger.info(`Applying scene ${scene.name} with priority ${scene.attributes.priority || 0}`);
+        }
+
+        sortedScenes = sortedScenes.concat(this.instance._unstageScenes);
         this.instance._unstageScenes = [];
 
         if (sortedScenes.length == 0) {
             Logger.warn("No scenes to active, no need to send them");
             return;
         }
-        Logger.debug(`Sorted scenes: ${sortedScenes.map(s => s.name).join(", ")}`);
 
         //Stop all running effects
         for (const [type, effects] of this._instance._runningEffects) {
@@ -308,7 +314,6 @@ export class Scenes {
 
         //Loop through all the scenes and queue all the targets in the scenes by priority
         for (const scene of sortedScenes) {
-            Logger.info(`Applying scene ${scene.name} with priority ${scene.attributes.priority || "0"}`);
             for (const state of scene.attributes.states) {
                 for (const target of state.targets) {
                     if (state.attributes) {
