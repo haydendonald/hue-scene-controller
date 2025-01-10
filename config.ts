@@ -3,6 +3,7 @@ import { ConfigFile } from "./configFile";
 import { Controller } from "./controller";
 import { HueController } from "./controllers/hue";
 import { ColorCycle } from "./effects/colorCycle";
+import { DayLightEffect } from "./effects/dayLight";
 import { NaturalLightEffect } from "./effects/naturalLight";
 import { NightLightEffect } from "./effects/nightLight";
 import { Input } from "./input";
@@ -79,6 +80,8 @@ export class Config {
                 return new NaturalLightEffect(target, attributes);
             case "Night Light":
                 return new NightLightEffect(target, attributes);
+            case "Day Light":
+                return new DayLightEffect(target, attributes);
         }
     }
 }
