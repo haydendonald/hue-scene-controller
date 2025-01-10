@@ -12,6 +12,7 @@ export class NaturalLightEffect extends Effect {
     private _lastChange = Date.now();
     private _fadeTime;
     private _brightness;
+    private _on;
     private _checkInterval = 5 * 60000; // 5 minutes
     private _longFadeTime = 60 * 60000; // 60 minutes
 
@@ -19,6 +20,7 @@ export class NaturalLightEffect extends Effect {
         super("Natural Light", "Mimic the natural light cycle of the day", target, attributes);
         this._fadeTime = attributes.transitionMs;
         this._brightness = attributes.brightnessPercent;
+        this._on = attributes.on;
     }
 
     async queue(forceQueue: boolean = false): Promise<boolean> {
@@ -41,7 +43,8 @@ export class NaturalLightEffect extends Effect {
                 ...currentAttributes,
                 ...this._brightness ? { brightnessPercent: this._brightness } : {},
                 ... { colorTemperature },
-                ...transitionMs ? { transitionMs } : {}
+                ...transitionMs ? { transitionMs } : {},
+                ...this._on !== undefined ? { on: this._on } : {}
             }
             Scenes.queueTarget(target, attributes);
         }

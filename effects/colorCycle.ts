@@ -22,11 +22,13 @@ export class ColorCycle extends Effect {
     private _lastChange = Date.now();
     private _fadeTime;
     private _brightness;
+    private _on;
 
     constructor(target: Target, attributes: LightStateAttributes) {
         super("Color Cycle", "Do a color cycle", target, attributes);
         this._fadeTime = attributes.transitionMs || 5000;
         this._brightness = attributes.brightnessPercent || 100;
+        this._on = attributes.on;
     }
 
     async queue(forceQueue: boolean = false): Promise<boolean> {
@@ -43,7 +45,8 @@ export class ColorCycle extends Effect {
                 ... { brightnessPercent: this._brightness },
                 ...currentAttributes,
                 ... this._colors[color],
-                ... { transitionMs: this._fadeTime }
+                ... { transitionMs: this._fadeTime },
+                ...this._on !== undefined ? { on: this._on } : {}
             }
             Scenes.queueTarget(target, attributes);
         }

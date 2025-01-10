@@ -12,6 +12,7 @@ export class NightLightEffect extends Effect {
     private _lastChange = Date.now();
     private _fadeTime;
     private _brightness;
+    private _on;
     private _checkInterval = 5 * 60000; // 5 minutes
     private _longFadeTime = 60 * 60000; // 60 minutes
 
@@ -19,6 +20,7 @@ export class NightLightEffect extends Effect {
         super("Night Light", "Adjust the brightness of the lights to be more comfortable for night time", target, attributes);
         this._fadeTime = attributes.transitionMs;
         this._brightness = attributes.brightnessPercent || 100; //Minimum brightness
+        this._on = attributes.on;
     }
 
     async queue(forceQueue: boolean = false): Promise<boolean> {
@@ -41,7 +43,9 @@ export class NightLightEffect extends Effect {
             const attributes = {
                 ...currentAttributes,
                 ... { brightnessPercent },
-                ...transitionMs ? { transitionMs } : {}
+                ...transitionMs ? { transitionMs } : {},
+                ...this._on !== undefined ? { on: this._on } : {}
+
             }
             Scenes.queueTarget(target, attributes);
         }
