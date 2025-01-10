@@ -99,7 +99,7 @@ export class HTTPInput implements Input {
                 res.send(new WebResponse(WebStatus.SUCCESS, Array.from(Scenes.scenes.values()).map(scene => {
                     return {
                         scene,
-                        staged: Scenes.activeScenes.filter(filterScene => filterScene.id == scene.id).length != 0
+                        staged: Scenes.activeScenes.filter(filterScene => filterScene.scene.id == scene.id).length != 0
                     }
                 })));
                 return;
@@ -113,7 +113,7 @@ export class HTTPInput implements Input {
 
             res.send(new WebResponse(WebStatus.SUCCESS, {
                 scene,
-                staged: Scenes.activeScenes.filter(filterScene => filterScene.id == scene.id).length != 0
+                staged: Scenes.activeScenes.filter(filterScene => filterScene.scene.id == scene.id).length != 0
             }));
         });
 

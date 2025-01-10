@@ -11,7 +11,7 @@ import { Effect } from "./types/effect";
 export class Scenes {
     private static _instance: Scenes;
     private _scenes: Map<number, Scene> = new Map();
-    private _activeScenes: Scene[] = [];
+    private _activeScenes: { date: Date, scene: Scene }[] = [];
     private _unstageScenes: Scene[] = [];
     private _runningEffects: Map<string, Map<Target, Effect[]>> = new Map();
     private _currentTargets: Map<string, Map<Target, LightStateAttributes>> = new Map();
@@ -124,8 +124,11 @@ export class Scenes {
             newScene.attributes.globalTransitionMs = transitionMs !== undefined ? transitionMs : newScene.attributes.globalTransitionMs;
             newScene.attributes.globalBrightnessPercent = brightness !== undefined ? brightness : newScene.attributes.globalBrightnessPercent;
 
-            this.instance._activeScenes = this.instance._activeScenes.filter(s => s.id !== scene.id); //Remove old scene if it exists
-            this.instance._activeScenes.push(newScene); //Place the scene at the end of the list
+            this.instance._activeScenes = this.instance._activeScenes.filter(s => s.scene.id !== scene.id); //Remove old scene if it exists
+            this.instance._activeScenes.push({
+                date: new Date(),
+                scene: newScene
+            });
         }
     }
 
@@ -153,7 +156,7 @@ export class Scenes {
             }
 
             //Remove the scene from the active scenes
-            this.instance._activeScenes = this.instance._activeScenes.filter(s => s.id !== sceneId);
+            this.instance._activeScenes = this.instance._activeScenes.filter(s => s.scene.id !== sceneId);
         }
     }
 
@@ -165,7 +168,7 @@ export class Scenes {
             else { sceneId = i; }
 
             //If it's staged, unstage it, otherwise stage it
-            const isStaged = Scenes.activeScenes.filter(scene => scene.id == sceneId).length != 0;
+            const isStaged = Scenes.activeScenes.filter(s => s.scene.id == sceneId).length != 0;
             if (isStaged) {
                 Scenes.unstageScene(sceneId, transitionMs);
             }
@@ -272,7 +275,6 @@ export class Scenes {
                     }
                     return;
                 }
-                // delete newAttributes.effect;
             }
 
             //Add the target to the actions
@@ -280,17 +282,18 @@ export class Scenes {
             actions.get(target.type)?.set(target, newAttributes);
         }
 
-        //Sort the scenes by priority
+        //Sort the scenes
         let sortedScenes = [
-            ...this.instance._activeScenes.reverse().sort((a, b) => { //Sort the scenes by priority
+            ...this.instance._activeScenes.sort((a, b) => b.date.getTime() - a.date.getTime()).map(s => s.scene).sort((a, b) => { //Sort the scenes by priority
                 if (!a) { return 1; }
                 if (!b) { return -1; }
+                if (a.attributes.alwaysStage && !b.attributes.alwaysStage) { return 1; }
+                if (!a.attributes.alwaysStage && b.attributes.alwaysStage) { return -1; }
                 if (a.attributes.priority === undefined && b.attributes.priority === undefined) { return 0; }
                 if (a.attributes.priority === undefined) { return 1; }
                 if (b.attributes.priority === undefined) { return -1; }
                 return b.attributes.priority - a.attributes.priority;
-            }),
-            ...Array.from(this.instance._scenes.values()).filter(scene => scene.attributes.alwaysStage), //Add the scenes with always stage at the end
+            })
         ];
 
         //Print the scenes being staged
