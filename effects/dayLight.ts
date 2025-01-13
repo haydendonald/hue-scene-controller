@@ -5,6 +5,7 @@
 
 import { Scenes } from "../scenes";
 import { Effect } from "../types/effect";
+import { Group } from "../types/group";
 import { LightStateAttributes } from "../types/lightState";
 import { Target } from "../types/target";
 
@@ -16,7 +17,7 @@ export class DayLightEffect extends Effect {
     private _checkInterval = 5 * 60000; // 5 minutes
     private _longFadeTime = 60 * 60000; // 60 minutes
 
-    constructor(target: Target, attributes: LightStateAttributes) {
+    constructor(target: Target | Group, attributes: LightStateAttributes) {
         super("Day Light", "Adjust the brightness of the lights to be more comfortable for night time, brighter during the day", target, attributes);
         this._fadeTime = attributes.transitionMs;
         this._brightness = attributes.brightnessPercent || 100; //Minimum brightness
@@ -54,4 +55,6 @@ export class DayLightEffect extends Effect {
     }
 
     async sent(): Promise<void> { }
+
+    async stop(): Promise<void> { }
 }

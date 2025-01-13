@@ -5,6 +5,7 @@
 
 import { Scenes } from "../scenes";
 import { Effect } from "../types/effect";
+import { Group } from "../types/group";
 import { LightStateAttributes } from "../types/lightState";
 import { Target } from "../types/target";
 
@@ -16,7 +17,7 @@ export class NaturalLightEffect extends Effect {
     private _checkInterval = 5 * 60000; // 5 minutes
     private _longFadeTime = 60 * 60000; // 60 minutes
 
-    constructor(target: Target, attributes: LightStateAttributes) {
+    constructor(target: Target | Group, attributes: LightStateAttributes) {
         super("Natural Light", "Mimic the natural light cycle of the day", target, attributes);
         this._fadeTime = attributes.transitionMs;
         this._brightness = attributes.brightnessPercent;
@@ -53,4 +54,6 @@ export class NaturalLightEffect extends Effect {
     }
 
     async sent(): Promise<void> { }
+
+    async stop(): Promise<void> { }
 }

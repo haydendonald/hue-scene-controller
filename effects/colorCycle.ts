@@ -5,11 +5,11 @@
 
 import { Scenes } from "../scenes";
 import { Effect } from "../types/effect";
+import { Group } from "../types/group";
 import { LightStateAttributes } from "../types/lightState";
 import { Target } from "../types/target";
 
 export class ColorCycle extends Effect {
-
     private _colors: { hue: number, sat: number }[] = [
         { hue: 0, sat: 100 },
         { hue: 60, sat: 100 },
@@ -24,7 +24,7 @@ export class ColorCycle extends Effect {
     private _brightness;
     private _on;
 
-    constructor(target: Target, attributes: LightStateAttributes) {
+    constructor(target: Target | Group, attributes: LightStateAttributes) {
         super("Color Cycle", "Do a color cycle", target, attributes);
         this._fadeTime = attributes.transitionMs || 5000;
         this._brightness = attributes.brightnessPercent || 100;
@@ -56,4 +56,6 @@ export class ColorCycle extends Effect {
     }
 
     async sent(): Promise<void> { }
+
+    async stop(): Promise<void> { }
 }

@@ -10,6 +10,7 @@ import { Input } from "./input";
 import { HTTPInput } from "./inputs/http/http";
 import { Logger, LogLevel } from "./logger";
 import { Effect } from "./types/effect";
+import { Group } from "./types/group";
 import { LightStateAttributes } from "./types/lightState";
 import { Target } from "./types/target";
 
@@ -66,22 +67,33 @@ export class Config {
     }
 
     /**
+     * Get an effect type by name
+     * @param name The effect name
+     * @returns The effect type
+     */
+    static getEffect(name: string) {
+        switch (name) {
+            case "Color Cycle":
+                return ColorCycle;
+            case "Natural Light":
+                return NaturalLightEffect;
+            case "Night Light":
+                return NightLightEffect;
+            case "Day Light":
+                return DayLightEffect;
+        }
+    }
+
+    /**
      * Create an effect by name
      * @param name The name
      * @param targets The targets
      * @param attributes The attributes
      * @returns A new instance of the effect
      */
-    static createEffect(name: string, target: Target, attributes: LightStateAttributes): Effect | undefined {
-        switch (name) {
-            case "Color Cycle":
-                return new ColorCycle(target, attributes);
-            case "Natural Light":
-                return new NaturalLightEffect(target, attributes);
-            case "Night Light":
-                return new NightLightEffect(target, attributes);
-            case "Day Light":
-                return new DayLightEffect(target, attributes);
-        }
+    static createEffect(name: string, target: Target | Group, attributes: LightStateAttributes): Effect | undefined {
+        const effectType = Config.getEffect(name);
+        if (!effectType) { return; }
+        return new effectType(target, attributes);
     }
 }
