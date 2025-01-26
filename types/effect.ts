@@ -5,6 +5,7 @@ import { LightStateAttributes } from "./lightState";
 import { Target } from "./target";
 
 export abstract class Effect {
+    uid: string;
     name: string;
     description: string;
     targets: Target[];
@@ -28,22 +29,25 @@ export abstract class Effect {
         this.description = description;
         this.targets = targets;
         this.attributes = attributes;
+        this.uid = `${this.name}-${this.targets.map(t => t.id).join("-")}`;
     }
 
     /**
-     * Queue any changes for the targets. Runs approx every 10ms
-     * @param forceQueue True if the effect should be queued even if it's not time
-     * @returns True if the effect has been queued and should be sent
+     * Generate the effect
+     * @param globalTransitionMs Global transition time in milliseconds
+     * @param globalBrightnessPct Global brightness percentage
+     * @returns A map of targets and their attributes
      */
-    abstract queue(forceQueue: boolean): Promise<boolean>;
+    abstract generate(globalTransitionMs?: number, globalBrightnessPct?: number): Promise<Map<Target, LightStateAttributes>>;
+
+    /**
+     * Is this effect ready to be generated again. This is called by the Scene handler every second
+     * @returns True if the effect is ready to be generated
+     */
+    abstract shouldGenerate(): boolean;
 
     /**
      * Callback for when the queue is sent to the controllers
      */
-    abstract sent(): Promise<void>;
-
-    /**
-     * Stop the effect and destroy it
-     */
-    abstract stop(): Promise<void>;
+    abstract sent(): void;
 }

@@ -24,16 +24,11 @@ export class NightLightEffect extends Effect {
         this._on = attributes.on;
     }
 
-    async queue(forceQueue: boolean = false): Promise<boolean> {
-        if (forceQueue != true && Date.now() - this._lastChange < this._checkInterval) { return false; }
-        this._lastChange = Date.now();
-
+    async generate(globalTransitionMs?: number, globalBrightnessPct?: number): Promise<Map<Target, LightStateAttributes>> {
+        let ret = new Map<Target, LightStateAttributes>();
         for (const target of this.targets) {
-            const currentAttributes = Scenes.getCurrentTarget(target) || {};
-            if (currentAttributes.on === false) { continue; } // Skip if the light is off
-
             const hour = new Date().getHours();
-            const brightnessFloat = this._brightness / 100.0;
+            const brightnessFloat = (globalBrightnessPct || this._brightness) / 100.0;
 
             let on = true;
             let brightnessPercent = 100;
@@ -47,9 +42,8 @@ export class NightLightEffect extends Effect {
             else if (hour >= 2 && hour < 3) { brightnessPercent = 50 * brightnessFloat; }
             else if (hour >= 3 && hour < 6) { brightnessPercent = 10 * brightnessFloat; }
 
-            const transitionMs = forceQueue == true ? this._fadeTime : this._longFadeTime;
-            Scenes.queueTarget(target, {
-                ...currentAttributes,
+            const transitionMs = globalTransitionMs || this._fadeTime || this._longFadeTime;
+            ret.set(target, {
                 ... {
                     on,
                     brightnessPercent
@@ -58,10 +52,14 @@ export class NightLightEffect extends Effect {
             });
         }
 
-        return true;
+        return ret;
     }
 
-    async sent(): Promise<void> { }
+    sent(): void {
+        this._lastChange = Date.now();
+    }
 
-    async stop(): Promise<void> { }
+    shouldGenerate(): boolean {
+        return this._checkInterval < Date.now() - this._lastChange;
+    }
 }

@@ -20,41 +20,42 @@ export class DayLightEffect extends Effect {
     constructor(target: Target | Group, attributes: LightStateAttributes) {
         super("Day Light", "Adjust the brightness of the lights to be more comfortable for night time, brighter during the day", target, attributes);
         this._fadeTime = attributes.transitionMs;
-        this._brightness = attributes.brightnessPercent || 100; //Minimum brightness
+        this._brightness = attributes.brightnessPercent || 0; //Minimum brightness
         this._on = attributes.on;
     }
 
-    async queue(forceQueue: boolean = false): Promise<boolean> {
-        if (forceQueue != true && Date.now() - this._lastChange < this._checkInterval) { return false; }
-        this._lastChange = Date.now();
-
+    async generate(globalTransitionMs?: number, globalBrightnessPct?: number): Promise<Map<Target, LightStateAttributes>> {
+        let ret = new Map<Target, LightStateAttributes>();
         for (const target of this.targets) {
-            const currentAttributes = Scenes.getCurrentTarget(target) || {};
-            if (currentAttributes.on === false) { continue; } // Skip if the light is off
 
-            let brightnessPercent = 100;
+            let brightnessPercent = globalBrightnessPct || 100;
             const hour = new Date().getHours();
-            if (hour >= 21 || hour < 6) { brightnessPercent = 5; } //During the night, 9pm to 6am
-            else if (hour >= 6 && hour < 9) { brightnessPercent = 70; } //Morning, 6am to 9am
+            if (hour >= 21 || hour < 6) { //During the night, 9pm to 6am
+                brightnessPercent = this._brightness;
+            }
+            else if (hour >= 6 && hour < 9) { brightnessPercent = 50; } //Morning, 6am to 9am
             else if (hour >= 9 && hour < 21) { brightnessPercent = 100; } //Day, 9am to 9pm
 
             if (brightnessPercent < this._brightness) { brightnessPercent = this._brightness; } //Don't go below the minimum brightness
-            
-            const transitionMs = forceQueue == true ? this._fadeTime : this._longFadeTime;
+
+            const transitionMs = globalTransitionMs || this._fadeTime || this._longFadeTime;
             const attributes = {
-                ...currentAttributes,
-                ... { brightnessPercent },
+                ... { brightnessPercent: brightnessPercent * ((globalBrightnessPct || 100) / 100) },
                 ...transitionMs ? { transitionMs } : {},
                 ...this._on !== undefined ? { on: this._on } : {}
 
             }
-            Scenes.queueTarget(target, attributes);
+            ret.set(target, attributes);
         }
 
-        return true;
+        return ret;
     }
 
-    async sent(): Promise<void> { }
+    sent(): void {
+        this._lastChange = Date.now();
+    }
 
-    async stop(): Promise<void> { }
+    shouldGenerate(): boolean {
+        return this._checkInterval < Date.now() - this._lastChange;
+    }
 }

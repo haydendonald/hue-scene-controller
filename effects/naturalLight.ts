@@ -24,14 +24,9 @@ export class NaturalLightEffect extends Effect {
         this._on = attributes.on;
     }
 
-    async queue(forceQueue: boolean = false): Promise<boolean> {
-        if (forceQueue != true && Date.now() - this._lastChange < this._checkInterval) { return false; }
-        this._lastChange = Date.now();
-
+    async generate(globalTransitionMs?: number, globalBrightnessPct?: number): Promise<Map<Target, LightStateAttributes>> {
+        let ret = new Map<Target, LightStateAttributes>();
         for (const target of this.targets) {
-            const currentAttributes = Scenes.getCurrentTarget(target) || {};
-            if (currentAttributes.on === false) { continue; } // Skip if the light is off
-
             let colorTemperature = 2700;
             const hour = new Date().getHours();
             if (hour >= 21 || hour < 6) { colorTemperature = 2000; } //During the night, 9pm to 6am
@@ -39,21 +34,28 @@ export class NaturalLightEffect extends Effect {
             else if (hour >= 9 && hour < 18) { colorTemperature = 4000; } //Day, 9am to 6pm
             else if (hour >= 18 && hour < 21) { colorTemperature = 2700; } //Evening, 6pm to 9pm
 
-            const transitionMs = forceQueue == true ? this._fadeTime : this._longFadeTime;
+            const transitionMs = globalTransitionMs || this._fadeTime || this._longFadeTime;
+            const brightnessPct = globalBrightnessPct || this._brightness || 100;
+
             const attributes = {
-                ...currentAttributes,
-                ...this._brightness ? { brightnessPercent: this._brightness } : {},
-                ... { colorTemperature },
-                ...transitionMs ? { transitionMs } : {},
+                ...{
+                    brightnessPct,
+                    transitionMs,
+                    colorTemperature
+                },
                 ...this._on !== undefined ? { on: this._on } : {}
             }
-            Scenes.queueTarget(target, attributes);
+            ret.set(target, attributes);
         }
 
-        return true;
+        return ret;
     }
 
-    async sent(): Promise<void> { }
+    sent(): void {
+        this._lastChange = Date.now();
+    }
 
-    async stop(): Promise<void> { }
+    shouldGenerate(): boolean {
+        return this._checkInterval < Date.now() - this._lastChange;
+    }
 }

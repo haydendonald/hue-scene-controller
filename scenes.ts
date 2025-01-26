@@ -13,9 +13,9 @@ export class Scenes {
     private _scenes: Map<number, Scene> = new Map();
     private _activeScenes: { date: Date, scene: Scene }[] = [];
     private _unstageScenes: Scene[] = [];
-    private _runningEffects: Effect[] = [];
+    private _runningEffects: Map<string, Effect> = new Map();
     private _currentTargets: Map<string, Map<number, LightStateAttributes>> = new Map();
-    private _effectsHandler: NodeJS.Timeout | undefined;
+    private _effectHandler: NodeJS.Timeout = setTimeout(() => { }, 0);
 
     static get instance() {
         if (!Scenes._instance) { Scenes._instance = new Scenes(); }
@@ -33,41 +33,33 @@ export class Scenes {
 
     constructor() {
         Scenes._instance = this;
-
-        //Periodically run the effect handlers
-        const handleEffects = async () => {
-            clearTimeout(this._effectsHandler);
-
-            //Queue any changes for the effects
-            const effectQueued = await Scenes.queueEffects();
-
-            //Send the queued targets if any effects were queued
-            if (effectQueued == true) {
-                await Scenes.sendQueuedTargets();
-
-                //Callback for when the queue is sent to the controllers
-                await Promise.all(this._runningEffects.map((effect) => {
-                    return new Promise<void>(async (resolve) => {
-                        await effect.sent();
-                        resolve();
-                    })
-                }));
-            }
-
-            this._effectsHandler = setTimeout(handleEffects, 100); //Run every 100ms
-        }
-        handleEffects();
     }
 
-    static async queueEffects(forceQueue: boolean = false): Promise<boolean> {
-        let effectQueued = false;
-        await Promise.all(this.instance._runningEffects.map((effect) => {
-            return new Promise<void>(async (resolve) => {
-                if (await effect.queue(forceQueue)) { effectQueued = true; }
-                resolve();
-            })
-        }));
-        return effectQueued;
+    private effectHandler(): void {
+        clearTimeout(this._effectHandler);
+        this._effectHandler = setTimeout(async () => {
+            //Go through the effects and see if any of them need to generate
+            let shouldGenerate = false;
+            if (this._runningEffects.size > 0) {
+                for (const [uid, effect] of this._runningEffects) {
+                    if (effect.shouldGenerate()) {
+                        shouldGenerate = true;
+                        break;
+                    }
+                }
+            }
+
+            //If an effect is requesting generation, send the scenes again
+            if (shouldGenerate) {
+                await Scenes.sendScenes();
+
+                //Let the effects know the scene has been sent
+                await Promise.all(Array.from(this._runningEffects.values()).map(effect => effect.sent()));
+            }
+
+            //Call the effect handler again in 1 second
+            this.effectHandler();
+        }, 1000);
     }
 
     static addScene(name: string, description: string, attributes: SceneAttributes) {
@@ -218,12 +210,14 @@ export class Scenes {
         await Promise.all(Config.controllers.map(async controller => {
             await controller.sendQueuedTargets();
         }));
+        await Promise.all(Array.from(this.instance._runningEffects.values()).map(effect => effect.sent()));
     }
 
     static async sendScenes(transitionMs?: number, brightness?: number) {
         //Stop all running effects
-        await Promise.all(this._instance._runningEffects.map(effect => effect.stop)); //TODO: this may not work correctly
-        this._instance._runningEffects = [];
+        clearTimeout(this.instance._effectHandler);
+        let newEffects = new Map<string, Effect>();
+        // this._instance._runningEffects = [];
 
         //Sort the scenes
         let sortedScenes = [
@@ -268,7 +262,33 @@ export class Scenes {
                         //Generate the effect
                         const effect = new effectType(effectTarget, state.attributes);
                         if (effect) {
-                            this._instance._runningEffects.push(effect);
+
+                            //If the effect ready exists, use that one
+                            if (this._instance._runningEffects.has(effect.uid)) {
+                                newEffects.set(effect.uid, this._instance._runningEffects.get(effect.uid) as Effect);
+                            }
+                            else {
+                                newEffects.set(effect.uid, effect);
+                            }
+
+                            //Check that the effect is defined
+                            const actualEffect = newEffects.get(effect.uid);
+                            if (!actualEffect) {
+                                Logger.error(`Failed to generate effect ${effect.name}(${effect.uid}). It is undefined`);
+                                continue;
+                            }
+
+                            //Generate the effect
+                            const toApply = await actualEffect.generate(transitionMs, brightness);
+                            for (const [target, attributes] of toApply) {
+                                const newAttributes = {
+                                    ...attributes,
+                                    ...actions.get(target.type)?.get(target.id)?.attributes || {}
+                                };
+                                if (!actions.has(target.type)) { actions.set(target.type, new Map()); }
+                                actions.get(target.type)?.set(target.id, { target, attributes: newAttributes });
+                            }
+
                             continue;
                         }
                     }
@@ -315,8 +335,14 @@ export class Scenes {
 
         //Queue and send the targets to the controllers
         await Scenes.queueTargets(targetActions);
-        await Scenes.queueEffects(true);
         await Scenes.sendQueuedTargets();
+
+        this._instance._runningEffects = newEffects;
+
+        //If there are effects begin the handler
+        if (this.instance._runningEffects.size > 0) {
+            this.instance.effectHandler();
+        }
     }
 
     /**

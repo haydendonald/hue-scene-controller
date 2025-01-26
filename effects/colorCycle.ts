@@ -31,31 +31,37 @@ export class ColorCycle extends Effect {
         this._on = attributes.on;
     }
 
-    async queue(forceQueue: boolean = false): Promise<boolean> {
-        if (forceQueue != true && Date.now() - this._lastChange < this._fadeTime) { return false; }
-        this._lastChange = Date.now();
-
+    async generate(globalTransitionMs?: number, globalBrightnessPct?: number): Promise<Map<Target, LightStateAttributes>> {
+        let ret = new Map<Target, LightStateAttributes>();
         let offset = 0;
         for (const target of this.targets) {
-            const currentAttributes = Scenes.getCurrentTarget(target) || {};
-            if (currentAttributes.on === false) { continue; } // Skip if the light is off
             let color = this._currentColor + offset++;
             if (color >= this._colors.length) { color = color - this._colors.length; }
+
+            const brightnessPct = globalBrightnessPct || this._brightness || 100;
+            const transitionMs = globalTransitionMs || this._fadeTime || 5000;
+
             const attributes = {
-                ... { brightnessPercent: this._brightness },
-                ...currentAttributes,
+                ...{
+                    brightnessPct,
+                    transitionMs,
+                    colorTemperature: undefined
+                },
                 ... this._colors[color],
-                ... { transitionMs: this._fadeTime },
                 ...this._on !== undefined ? { on: this._on } : {}
             }
-            Scenes.queueTarget(target, attributes);
+            ret.set(target, attributes);
         }
 
         if (this._currentColor++ >= this._colors.length) { this._currentColor = 0; }
-        return true;
+        return ret;
     }
 
-    async sent(): Promise<void> { }
+    sent(): void {
+        this._lastChange = Date.now();
+    }
 
-    async stop(): Promise<void> { }
+    shouldGenerate(): boolean {
+        return this._fadeTime < Date.now() - this._lastChange;
+    }
 }
