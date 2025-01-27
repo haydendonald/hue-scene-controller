@@ -18,7 +18,7 @@ export class ColorCycle extends Effect {
         { hue: 240, sat: 100 },
         { hue: 300, sat: 100 },
     ];
-    private _currentColor = 0;
+    private _currentColor = Math.floor(Math.random() * this._colors.length);
     private _lastChange = Date.now();
     private _fadeTime;
     private _brightness;
