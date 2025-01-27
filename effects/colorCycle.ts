@@ -52,8 +52,6 @@ export class ColorCycle extends Effect {
             }
             ret.set(target, attributes);
         }
-
-        if (this._currentColor++ >= this._colors.length) { this._currentColor = 0; }
         return ret;
     }
 
@@ -62,6 +60,8 @@ export class ColorCycle extends Effect {
     }
 
     shouldGenerate(): boolean {
-        return this._fadeTime < Date.now() - this._lastChange;
+        if (this._fadeTime > Date.now() - this._lastChange) { return false; }
+        if (this._currentColor++ >= this._colors.length) { this._currentColor = 0; }
+        return true;
     }
 }
